@@ -365,11 +365,6 @@ function App(){
             h('div',{style:{display:'flex',gap:6}},[5,10,15,20].map(n=>h('button',{key:n,onClick:()=>setQCount(n),style:{background:qCount===n?'white':'rgba(255,255,255,.3)',border:'none',borderRadius:50,padding:'7px 10px',fontFamily:'inherit',fontWeight:700,fontSize:'.82rem',color:qCount===n?cfg.color:'white',cursor:'pointer'}},n+'もん')))
           ),
 
-      isAddSub&&h('div',{style:{display:'flex',alignItems:'center',gap:8,color:'#fff',fontWeight:700,marginBottom:16,textShadow:'0 1px 3px rgba(0,0,0,.2)'}},
-        h('span',{style:{fontSize:'.95rem'}},'なんもん やる？'),
-        h('div',{style:{display:'flex',gap:6}},[5,10,15,20].map(n=>h('button',{key:n,onClick:()=>setQCount(n),style:{background:qCount===n?'white':'rgba(255,255,255,.3)',border:'none',borderRadius:50,padding:'7px 10px',fontFamily:'inherit',fontWeight:700,fontSize:'.82rem',color:qCount===n?cfg.color:'white',cursor:'pointer'}},n+'もん')))
-      ),
-
       h('button',{onClick:doStart,disabled:!canStart,style:{width:'100%',maxWidth:230,background:canStart?`linear-gradient(135deg,${cfg.color},${cfg.dark})`:'#ccc',color:'white',border:'none',borderRadius:50,padding:'15px 0',fontFamily:'inherit',fontSize:'1.15rem',fontWeight:900,cursor:canStart?'pointer':'default',boxShadow:canStart?`0 7px 0 ${cfg.dark}`:'none',letterSpacing:2}},'🎯 スタート！')
     ),
 
