@@ -80,12 +80,6 @@ const OPC={
   '÷':{label:'わりざん',sym:'÷',color:'#9775FA',dark:'#7C4FE0',bg:'#F4EFFF'},
 };
 
-const GRADES={
-  1:{label:'1年生',emoji:'🌱',desc:'10・20までの たしざん／ひきざん',ops:['+','-'],apply:(op,setLevel)=>{setLevel(20);}},
-  2:{label:'2年生',emoji:'🌿',desc:'100までの けいさん・九九（ランダム）',ops:['+','-','×'],apply:(op,setLevel,setDanMode)=>{if(op==='+'||op==='-')setLevel(100);else setDanMode('random');}},
-  3:{label:'3年生',emoji:'🌳',desc:'九九をつかった かけざん・わりざん',ops:['×','÷'],apply:(op,setLevel,setDanMode)=>{setDanMode('random');}},
-};
-
 /* ---------- 可視化パーツ ---------- */
 const FRUITS=['🍎','🍊','🍋','🍇','🍓','🍑','🍒','🍍','🥝','🍌','🍉','🫐'];
 
@@ -258,8 +252,6 @@ function Stepper({value,min,max,onChange,accent,big10}){
 /* ---------- App ---------- */
 function App(){
   const [scr,setScr]=useState('home');
-  const [opCtx,setOpCtx]=useState('practice');
-  const [grade,setGrade]=useState(null);
   const [op,setOp]=useState('+');
   const [dans,setDans]=useState(new Set());
   const [danMode,setDanMode]=useState('dan');
@@ -354,8 +346,6 @@ function App(){
     return h('div',{style:{fontSize:'.72rem',fontWeight:700,color:cfg.color,background:cfg.bg,borderRadius:50,padding:'2px 12px',display:'inline-block',marginBottom:4}},(op==='×'?q.a+'のだん ':q.b+'でわる ')+(qi+1)+'/'+qsr.current.length+'もん');
   };
 
-  const opsToShow=opCtx==='grade'&&grade?GRADES[grade].ops:['+','-','×','÷'];
-
   return h('div',{style:{fontFamily:"'Hiragino Maru Gothic ProN','Yu Gothic',sans-serif",minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',padding:'16px 14px 44px',position:'relative',overflow:'hidden'}},
     h('div',{style:{position:'fixed',top:-90,left:-70,width:260,height:260,borderRadius:'50%',background:'radial-gradient(circle,#FFD6D2,transparent 70%)',opacity:.8,zIndex:0,pointerEvents:'none'}}),
     h('div',{style:{position:'fixed',bottom:-110,right:-90,width:300,height:300,borderRadius:'50%',background:'radial-gradient(circle,#D6E6FF,transparent 70%)',opacity:.8,zIndex:0,pointerEvents:'none'}}),
@@ -380,26 +370,16 @@ function App(){
       h('div',{style:{fontSize:'2.1rem',fontWeight:900,color:'#20242F',margin:'14px 0 4px',letterSpacing:2}},'さんすうひろば'),
       h('div',{style:{fontSize:'.85rem',color:'#8A93A6',fontWeight:700,marginBottom:26}},'あそんで まなぼう！'),
       h('div',{style:{display:'flex',flexDirection:'column',gap:12,width:'100%'}},
-        h(ModeCard,{emoji:'🎒',title:'学年からはじめる',desc:'1〜3年生むけの おすすめメニュー',accent:'#FFA94D',soft:'#FFF5E9',onClick:()=>setScr('gradeSelect')}),
-        h(ModeCard,{emoji:'🧮',title:'けいさんれんしゅう',desc:'たしざん・ひきざん・かけざん・わりざん',accent:'#4D96FF',soft:'#EFF5FF',onClick:()=>{setOpCtx('practice');setScr('opSelect');}}),
+        h(ModeCard,{emoji:'🧮',title:'けいさんれんしゅう',desc:'たしざん・ひきざん・かけざん・わりざん',accent:'#4D96FF',soft:'#EFF5FF',onClick:()=>setScr('opSelect')}),
         h(ModeCard,{emoji:'🧩',title:'すうじビジュアル',desc:'すきな かずを ブロックで みてみよう',accent:'#9775FA',soft:'#F4EFFF',onClick:()=>setScr('visualizer')})
       )
     ),
 
-    scr==='gradeSelect'&&h('div',{className:'view',style:{display:'flex',flexDirection:'column',alignItems:'center',width:'100%',maxWidth:380,position:'relative',zIndex:1}},
-      h(BackBtn,{onClick:()=>setScr('home')}),
-      h('div',{style:{fontSize:'1.5rem',fontWeight:900,margin:'6px 0 4px',textAlign:'center'}},'がくねんをえらんでね'),
-      h('div',{style:{fontSize:'.8rem',color:'#8A93A6',fontWeight:700,marginBottom:18,textAlign:'center'}},'あとから ないようは かえられるよ'),
-      h('div',{style:{display:'flex',flexDirection:'column',gap:12,width:'100%'}},
-        Object.entries(GRADES).map(([gk,g])=>h(ModeCard,{key:gk,emoji:g.emoji,title:g.label,desc:g.desc,accent:'#4D96FF',soft:'#EFF5FF',onClick:()=>{setGrade(gk);setOpCtx('grade');setScr('opSelect');}}))
-      )
-    ),
-
     scr==='opSelect'&&h('div',{className:'view',style:{display:'flex',flexDirection:'column',alignItems:'center',width:'100%',maxWidth:380,position:'relative',zIndex:1}},
-      h(BackBtn,{onClick:()=>setScr(opCtx==='grade'?'gradeSelect':'home')}),
-      h('div',{style:{fontSize:'1.4rem',fontWeight:900,margin:'6px 0 18px',textAlign:'center'}},opCtx==='grade'&&grade?GRADES[grade].label+'の けいさん':'けいさんを えらんでね'),
+      h(BackBtn,{onClick:()=>setScr('home')}),
+      h('div',{style:{fontSize:'1.4rem',fontWeight:900,margin:'6px 0 18px',textAlign:'center'}},'けいさんを えらんでね'),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,width:'100%'}},
-        opsToShow.map(k=>{const c=OPC[k];return h('button',{key:k,className:'tapbtn',onClick:()=>{setOp(k);setDans(new Set());setDanMode('dan');setLevel(10);if(opCtx==='grade'&&grade)GRADES[grade].apply(k,setLevel,setDanMode);setScr('title');},style:{background:'#fff',border:'none',borderRadius:24,padding:'26px 0 18px',boxShadow:'0 6px 20px rgba(32,36,47,.08)',display:'flex',flexDirection:'column',alignItems:'center',gap:10}},
+        ['+','-','×','÷'].map(k=>{const c=OPC[k];return h('button',{key:k,className:'tapbtn',onClick:()=>{setOp(k);setDans(new Set());setDanMode('dan');setLevel(10);setScr('title');},style:{background:'#fff',border:'none',borderRadius:24,padding:'26px 0 18px',boxShadow:'0 6px 20px rgba(32,36,47,.08)',display:'flex',flexDirection:'column',alignItems:'center',gap:10}},
           h('div',{style:{width:56,height:56,borderRadius:'50%',background:c.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.7rem',fontWeight:900,color:c.color}},c.sym),
           h('div',{style:{fontSize:'1.05rem',fontWeight:900,color:c.color}},c.label)
         );})
@@ -410,7 +390,7 @@ function App(){
       h(BackBtn,{onClick:()=>setScr('opSelect')}),
       h('div',{style:{width:64,height:64,borderRadius:'50%',background:cfg.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.7rem',color:cfg.color,fontWeight:900}},cfg.sym),
       h('div',{style:{fontSize:'1.6rem',fontWeight:900,color:'#20242F',margin:'10px 0 4px'}},cfg.label),
-      h('div',{style:{fontSize:'.74rem',fontWeight:800,color:'#8A93A6',background:'#F1F3F8',padding:'3px 12px',borderRadius:50,marginBottom:16}},grade?GRADES[grade].emoji+' '+GRADES[grade].label+'モード':'チャレンジ！🔥'),
+      h('div',{style:{fontSize:'.74rem',fontWeight:800,color:'#8A93A6',background:'#F1F3F8',padding:'3px 12px',borderRadius:50,marginBottom:16}},'チャレンジ！🔥'),
 
       isAddSub&&h('div',{style:{width:'100%',marginBottom:14}},
         h('div',{style:{fontSize:'.82rem',fontWeight:700,color:'#5B6376',marginBottom:8,textAlign:'center'}},'こたえの おおきさをえらんでね'),
