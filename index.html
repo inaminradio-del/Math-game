@@ -164,7 +164,7 @@ function MulVisual({a,b}){
 
 function DivVisual({a,b}){
   const X=OPC['×'],D=OPC['÷'];
-  const perGroup=a/b;
+  const perGroup=Math.floor(a/b),rem=a%b;
   const [phase,setPhase]=useState('all');
   useEffect(()=>{setPhase('all');const t1=setTimeout(()=>setPhase('msg'),1800);const t2=setTimeout(()=>setPhase('split'),3000);return()=>{clearTimeout(t1);clearTimeout(t2);};},[a,b]);
   const bs=a<=36?18:a<=64?14:11;
@@ -177,11 +177,17 @@ function DivVisual({a,b}){
     ),
     phase==='split'&&h('div',{style:{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center',maxWidth:300}},
       Array.from({length:b},(_,gi)=>h('div',{key:gi,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3}},
-        h('div',{style:{border:`2px solid ${D.color}`,borderRadius:14,padding:'6px 7px',background:D.bg,display:'flex',flexWrap:'wrap',gap:2,justifyContent:'center',animation:`splitin .35s ${gi*0.07}s cubic-bezier(.175,.885,.32,1.275) both`,minWidth:bs*2+10}},
+        h('div',{style:{border:`2px solid ${D.color}`,borderRadius:14,padding:'6px 7px',background:D.bg,display:'flex',flexWrap:'wrap',gap:2,justifyContent:'center',animation:`splitin .35s ${gi*0.07}s cubic-bezier(.175,.885,.32,1.275) both`,minWidth:bs*2+10,minHeight:bs+12}},
           Array.from({length:perGroup},(_,i)=>h('div',{key:i,style:{width:bs,height:bs,background:X.color,borderRadius:5}}))
         ),
         h('div',{style:{fontSize:'.62rem',fontWeight:800,color:D.dark}},gi+1+'つ')
-      ))
+      )),
+      phase==='split'&&rem>0&&h('div',{key:'rem',style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3}},
+        h('div',{style:{border:'2px dashed #B0AA98',borderRadius:14,padding:'6px 7px',background:'#F1EFE9',display:'flex',flexWrap:'wrap',gap:2,justifyContent:'center',animation:`splitin .35s ${b*0.07}s cubic-bezier(.175,.885,.32,1.275) both`,minWidth:bs*2+10,minHeight:bs+12}},
+          Array.from({length:rem},(_,i)=>h('div',{key:i,style:{width:bs,height:bs,background:'#C7C2B4',borderRadius:5}}))
+        ),
+        h('div',{style:{fontSize:'.62rem',fontWeight:800,color:'#8A93A6'}},'あまり')
+      )
     )
   );
 }
@@ -275,7 +281,6 @@ function App(){
   const [vzOp,setVzOp]=useState('+');
   const [vzA,setVzA]=useState(6);
   const [vzB,setVzB]=useState(3);
-  const [vzQ,setVzQ]=useState(4);
   const [vzReveal,setVzReveal]=useState(false);
 
   const q=questions[qi];
@@ -318,17 +323,16 @@ function App(){
   },[scr]);
 
   /* --- ビジュアライザー --- */
-  useEffect(()=>{setVzReveal(false);},[vzOp,vzA,vzB,vzQ]);
-  const VZDEFAULTS={'+':{a:6,b:3},'-':{a:8,b:3},'×':{a:4,b:3},'÷':{a:0,b:3,q:4}};
-  const pickVzOp=k=>{setVzOp(k);const d=VZDEFAULTS[k];setVzA(d.a);setVzB(d.b);if(k==='÷')setVzQ(d.q);};
-  const setVzANum=n=>{if(vzOp==='×')setVzA(Math.max(1,Math.min(9,n)));else if(vzOp==='+')setVzA(Math.max(0,Math.min(99,n)));else if(vzOp==='-'){const c=Math.max(1,Math.min(99,n));setVzA(c);setVzB(b=>Math.min(b,c));}};
+  useEffect(()=>{setVzReveal(false);},[vzOp,vzA,vzB]);
+  const VZDEFAULTS={'+':{a:6,b:3},'-':{a:8,b:3},'×':{a:4,b:3},'÷':{a:12,b:3}};
+  const pickVzOp=k=>{setVzOp(k);const d=VZDEFAULTS[k];setVzA(d.a);setVzB(d.b);};
+  const setVzANum=n=>{if(vzOp==='×')setVzA(Math.max(1,Math.min(9,n)));else if(vzOp==='+'||vzOp==='÷')setVzA(Math.max(0,Math.min(99,n)));else if(vzOp==='-'){const c=Math.max(1,Math.min(99,n));setVzA(c);setVzB(b=>Math.min(b,c));}};
   const setVzBNum=n=>{if(vzOp==='×')setVzB(Math.max(1,Math.min(9,n)));else if(vzOp==='+')setVzB(Math.max(0,Math.min(99,n)));else if(vzOp==='-')setVzB(Math.max(0,Math.min(vzA,n)));else if(vzOp==='÷')setVzB(Math.max(1,Math.min(9,n)));};
-  const setVzQNum=n=>setVzQ(Math.max(1,Math.min(9,n)));
   let vA,vB,vAns;
   if(vzOp==='+'){vA=vzA;vB=vzB;vAns=vzA+vzB;}
   else if(vzOp==='-'){vA=vzA;vB=vzB;vAns=vzA-vzB;}
   else if(vzOp==='×'){vA=vzA;vB=vzB;vAns=vzA*vzB;}
-  else{vA=vzB*vzQ;vB=vzB;vAns=vzQ;}
+  else{vA=vzA;vB=vzB;const dq=Math.floor(vzA/vzB),dr=vzA%vzB;vAns=dr>0?dq+' あまり '+dr:String(dq);}
   const vzLevel=vzOp==='+'?(vA+vB<=20?10:100):vzOp==='-'?(vA<=20?10:100):10;
   const vcfg=OPC[vzOp];
 
@@ -474,19 +478,13 @@ function App(){
         Object.entries(OPC).map(([k,c])=>h('button',{key:k,className:'tapbtn',onClick:()=>pickVzOp(k),style:{background:vzOp===k?c.bg:'#fff',border:vzOp===k?`2px solid ${c.color}`:'2px solid transparent',borderRadius:16,padding:'10px 0',fontWeight:900,fontSize:'1.2rem',color:c.color,boxShadow:'0 4px 14px rgba(32,36,47,.06)'}},c.sym))
       ),
       h('div',{style:{background:'white',borderRadius:24,boxShadow:'0 10px 30px rgba(32,36,47,.08)',width:'100%',padding:'18px 16px',marginBottom:14}},
-        vzOp==='÷'
-          ?h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
-              h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},'1グループの かず'),h(Stepper,{value:vzQ,min:1,max:9,onChange:setVzQNum,accent:vcfg.color})),
-              h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},'なんグループに わける？'),h(Stepper,{value:vzB,min:1,max:9,onChange:setVzBNum,accent:vcfg.color})),
-              h('div',{style:{textAlign:'center',fontSize:'.8rem',fontWeight:800,color:'#8A93A6'}},'ぜんぶで '+vA+'こ')
-            )
-          :h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
-              h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},vzOp==='×'?'1グループの かず':'1つめの かず'),h(Stepper,{value:vzA,min:vzOp==='×'?1:vzOp==='-'?1:0,max:vzOp==='×'?9:99,onChange:setVzANum,accent:vcfg.color,big10:vzOp!=='×'})),
-              h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},vzOp==='×'?'グループの かず':vzOp==='+'?'2つめの かず':'ひく かず'),h(Stepper,{value:vzB,min:vzOp==='×'?1:0,max:vzOp==='×'?9:vzOp==='-'?vzA:99,onChange:setVzBNum,accent:vcfg.color,big10:vzOp!=='×'}))
-            )
+        h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
+          h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},vzOp==='×'?'1グループの かず':vzOp==='÷'?'ぜんぶの かず':'1つめの かず'),h(Stepper,{value:vzA,min:vzOp==='×'?1:vzOp==='-'?1:0,max:vzOp==='×'?9:99,onChange:setVzANum,accent:vcfg.color,big10:vzOp!=='×'})),
+          h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},vzOp==='×'?'グループの かず':vzOp==='÷'?'なんグループに わける？':vzOp==='+'?'2つめの かず':'ひく かず'),h(Stepper,{value:vzB,min:vzOp==='×'||vzOp==='÷'?1:0,max:vzOp==='×'||vzOp==='÷'?9:vzOp==='-'?vzA:99,onChange:setVzBNum,accent:vcfg.color,big10:vzOp!=='×'&&vzOp!=='÷'}))
+        )
       ),
       h('div',{style:{background:'white',borderRadius:24,boxShadow:'0 10px 30px rgba(32,36,47,.08)',width:'100%',padding:'16px 12px',marginBottom:10}},
-        h(FruitVisual,{a:vA,b:vB,op:vzOp,fk:'vz-'+vzOp+vA+vB+vzQ,level:vzLevel}),
+        h(FruitVisual,{a:vA,b:vB,op:vzOp,fk:'vz-'+vzOp+vA+vB,level:vzLevel}),
         h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:10,fontSize:'1.6rem',fontWeight:900,flexWrap:'wrap'}},
           h('span',{style:{color:vcfg.color}},vA),h('span',{style:{color:vcfg.color}},vcfg.sym),h('span',{style:{color:vcfg.color}},vB),h('span',{style:{color:'#8A93A6'}},'='),
           vzReveal?h('span',{style:{color:'#2E9E52',animation:'fpop .3s both'}},vAns):h('button',{className:'tapbtn',onClick:()=>setVzReveal(true),style:{background:vcfg.bg,color:vcfg.color,borderRadius:14,padding:'4px 18px',fontWeight:900,fontSize:'1.1rem'}},'？')
