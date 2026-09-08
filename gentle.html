@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>やさしい さんすう</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<style>
+@keyframes fadein{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+@keyframes viewin{from{opacity:0}to{opacity:1}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{min-height:100vh;font-family:'Hiragino Maru Gothic ProN','Yu Gothic',sans-serif;-webkit-tap-highlight-color:transparent}
+button{font-family:inherit}
+.tapbtn{border:none;cursor:pointer}
+.tapbtn:active{opacity:.85}
+.view{animation:viewin .25s ease both}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const {useState,useEffect,useRef,createElement:h}=React;
+
+/* ---------- おと（既定オフ・やわらかいトーンのみ） ---------- */
+let AC=null;
+function tone(freq,dur,vol=0.14,delay=0){try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.type='sine';o.frequency.setValueAtTime(freq,AC.currentTime+delay);g.gain.setValueAtTime(0,AC.currentTime+delay);g.gain.linearRampToValueAtTime(vol,AC.currentTime+delay+.02);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+delay+dur);o.start(AC.currentTime+delay);o.stop(AC.currentTime+delay+dur+.05);}catch(e){}}
+const chimeOk=()=>{tone(587,.18);tone(784,.22,.14,.12);};
+const chimeTry=()=>{tone(392,.16,.1);};
+
+/* ---------- よみあげ ---------- */
+function speak(text){
+  try{
+    if(!('speechSynthesis'in window))return;
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='ja-JP';u.rate=0.82;u.pitch=1;
+    const voices=window.speechSynthesis.getVoices();
+    const jv=voices.find(v=>v.lang&&v.lang.startsWith('ja'));
+    if(jv)u.voice=jv;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+const TTS_OK='speechSynthesis'in window;
+
+/* ---------- せってい（localStorageに保存） ---------- */
+const PREFS_KEY='gentleMathPrefs_v1';
+const DEFAULT_PREFS={sound:false,motion:true,contrast:'normal',textSize:'normal',icon:'⭐'};
+function loadPrefs(){
+  let p={...DEFAULT_PREFS};
+  try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)p.motion=false;}catch(e){}
+  try{const raw=localStorage.getItem(PREFS_KEY);if(raw)p={...p,...JSON.parse(raw)};}catch(e){}
+  return p;
+}
+function savePrefs(p){try{localStorage.setItem(PREFS_KEY,JSON.stringify(p));}catch(e){}}
+const ICONS=['⭐','🚂','🦕','🐱','🚗','🌼'];
+const TEXTSIZE_PCT={normal:'100%',large:'116%',xlarge:'134%'};
+
+/* ---------- カラー（おさえめトーン） ---------- */
+const OPC={
+  '+':{label:'たしざん',sym:'＋',color:'#E8927C',dark:'#C97158',bg:'#FBEFEA'},
+  '-':{label:'ひきざん',sym:'－',color:'#6E9BC4',dark:'#4E7CA6',bg:'#EBF2F9'},
+  '×':{label:'かけざん',sym:'×',color:'#C9A15A',dark:'#A9803D',bg:'#FAF3E4'},
+  '÷':{label:'わりざん',sym:'÷',color:'#9B87B5',dark:'#7D6699',bg:'#F3EEF8'},
+};
+
+/* ---------- 数のブロック表示（つねに同じ見た目・アニメなし） ---------- */
+function BlockRow({count,fill,border}){return h('div',{style:{display:'flex',gap:3}},Array.from({length:count},(_,i)=>h('div',{key:i,style:{width:17,height:22,background:fill,border:`2px solid ${border}`,borderRadius:5,flexShrink:0}})));}
+function NumberBlocks({n,fill,border,label,labelColor}){
+  const rows=Math.floor(n/10),rem=n%10;
+  return h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:6}},
+    h('div',{style:{display:'flex',flexDirection:'column',gap:3}},
+      Array.from({length:rows},(_,i)=>h(BlockRow,{key:i,count:10,fill,border})),
+      (rem>0||rows===0)&&h(BlockRow,{count:rem,fill,border})
+    ),
+    label&&h('div',{style:{fontSize:'.85rem',fontWeight:800,color:labelColor||border}},label)
+  );
+}
+function AddBlocks({a,b,hc}){
+  const A=OPC['+'],B=OPC['-'];
+  return h('div',{style:{display:'flex',flexWrap:'wrap',alignItems:'flex-start',justifyContent:'center',gap:18}},
+    h(NumberBlocks,{n:a,fill:A.bg,border:hc?'#000':A.color,label:a+'こ',labelColor:A.dark}),
+    h('div',{style:{fontSize:'1.6rem',fontWeight:900,color:'#8A8577',alignSelf:'center'}},'＋'),
+    h(NumberBlocks,{n:b,fill:B.bg,border:hc?'#000':B.color,label:b+'こ',labelColor:B.dark})
+  );
+}
+function SubBlocks({a,b,hc}){
+  const A=OPC['+'],B=OPC['-'];
+  const rows=Math.floor(a/10),rem=a%10;let idx=0;const rowsData=[];
+  for(let r=0;r<rows;r++){const row=[];for(let c=0;c<10;c++){row.push(idx>=(a-b));idx++;}rowsData.push(row);}
+  const remRow=[];for(let c=0;c<rem;c++){remRow.push(idx>=(a-b));idx++;}
+  const cell=(rm)=>({width:17,height:22,borderRadius:5,flexShrink:0,background:rm?'#EAE7DE':A.bg,border:`2px solid ${rm?'#B6B0A2':(hc?'#000':A.color)}`});
+  return h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8}},
+    h('div',{style:{display:'flex',flexDirection:'column',gap:3}},
+      rowsData.map((row,ri)=>h('div',{key:ri,style:{display:'flex',gap:3}},row.map((rm,ci)=>h('div',{key:ci,style:cell(rm)})))),
+      remRow.length>0&&h('div',{style:{display:'flex',gap:3}},remRow.map((rm,ci)=>h('div',{key:ci,style:cell(rm)})))
+    ),
+    h('div',{style:{fontSize:'.85rem',fontWeight:800,color:B.dark,background:B.bg,borderRadius:12,padding:'4px 16px'}},'グレーの '+b+'こ を とるよ')
+  );
+}
+function MulBlocks({a,b,hc,motion}){
+  const M=OPC['×'];
+  const bs=a<=4?22:a<=6?18:a<=8?15:12;
+  return h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8}},
+    h('div',{style:{fontSize:'.82rem',fontWeight:800,color:M.dark,background:M.bg,borderRadius:50,padding:'4px 16px'}},a+'こずつの グループが '+b+'つ'),
+    h('div',{style:{display:'flex',flexWrap:'wrap',gap:9,justifyContent:'center',maxWidth:320}},
+      Array.from({length:b},(_,gi)=>h('div',{key:gi,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3}},
+        h('div',{style:{border:`2px solid ${hc?'#000':M.color}`,borderRadius:14,padding:'6px 7px',background:M.bg,display:'flex',flexWrap:'wrap',gap:2,justifyContent:'center',minWidth:bs*2+10,...(motion?{animation:`fadein .28s ${gi*0.06}s ease both`}:{})}},
+          Array.from({length:a},(_,i)=>h('div',{key:i,style:{width:bs,height:bs,background:M.color,borderRadius:5}}))
+        ),
+        h('div',{style:{fontSize:'.62rem',fontWeight:800,color:M.dark}},gi+1+'つめ')
+      ))
+    )
+  );
+}
+function DivBlocks({a,b,hc,motion}){
+  const D=OPC['÷'];const per=a/b;
+  const bs=a<=36?20:a<=64?16:12;
+  return h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8}},
+    h('div',{style:{fontSize:'.82rem',fontWeight:800,color:D.dark,background:D.bg,borderRadius:50,padding:'4px 16px'}},a+'こを '+b+'つに おなじ かずずつ わけると'),
+    h('div',{style:{display:'flex',flexWrap:'wrap',gap:9,justifyContent:'center',maxWidth:320}},
+      Array.from({length:b},(_,gi)=>h('div',{key:gi,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3}},
+        h('div',{style:{border:`2px solid ${hc?'#000':D.color}`,borderRadius:14,padding:'6px 7px',background:D.bg,display:'flex',flexWrap:'wrap',gap:2,justifyContent:'center',minWidth:bs*2+10,...(motion?{animation:`fadein .28s ${gi*0.06}s ease both`}:{})}},
+          Array.from({length:per},(_,i)=>h('div',{key:i,style:{width:bs,height:bs,background:D.color,borderRadius:5}}))
+        ),
+        h('div',{style:{fontSize:'.62rem',fontWeight:800,color:D.dark}},gi+1+'つめ')
+      ))
+    )
+  );
+}
+function OpVisual({op,a,b,hc,motion}){
+  return op==='+'?h(AddBlocks,{a,b,hc}):op==='-'?h(SubBlocks,{a,b,hc}):op==='×'?h(MulBlocks,{a,b,hc,motion}):h(DivBlocks,{a,b,hc,motion});
+}
+
+/* ---------- 出題 ---------- */
+function genQuestions(op,danNum,level,qCount){
+  if(op==='×'){const n=danNum||2;const all=[];for(let b=1;b<=9;b++)all.push({a:n,b,op});return all.map(p=>({...p,ans:p.a*p.b}));}
+  if(op==='÷'){const n=danNum||2;const all=[];for(let q=1;q<=9;q++)all.push({a:n*q,b:n,op});return all.map(p=>({...p,ans:p.a/p.b}));}
+  let all=[];
+  if(op==='+'){const mx=level;for(let a=1;a<mx;a++)for(let b=1;a+b<=mx;b++)all.push({a,b,op});}
+  else{const mx=level;for(let a=2;a<=mx;a++)for(let b=1;b<a;b++)all.push({a,b,op});}
+  all=all.sort(()=>Math.random()-.5);
+  return all.slice(0,qCount).map(p=>({...p,ans:p.op==='+'?p.a+p.b:p.a-p.b}));
+}
+function mkChoices(ans,op,level){
+  const s=new Set([ans]);let t=0;const range=op==='×'||op==='÷'?10:Math.max(3,Math.floor(level/8));
+  while(s.size<4&&t++<200){const d=Math.floor(Math.random()*(range*2+1))-range;const c=Math.max(1,ans+d);if(c!==ans)s.add(c);}
+  return[...s].sort(()=>Math.random()-.5);
+}
+
+/* ---------- 共通パーツ ---------- */
+function cardBox(hc){return {background:'#fff',borderRadius:24,boxShadow:hc?'none':'0 8px 22px rgba(60,52,36,.08)',border:hc?'3px solid #000':'1px solid #F0EBDF'};}
+function BigBtn({label,sub,onClick,accent,soft,hc,selected}){
+  return h('button',{className:'tapbtn',onClick,style:{...cardBox(hc),padding:'20px 10px',display:'flex',flexDirection:'column',alignItems:'center',gap:8,border:selected?`3px solid ${accent}`:(hc?'3px solid #000':'1px solid #F0EBDF')}},
+    h('div',{style:{width:54,height:54,borderRadius:16,background:soft,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.6rem',fontWeight:900,color:accent}},label),
+    sub&&h('div',{style:{fontSize:'1.02rem',fontWeight:900,color:'#3A3529'}},sub)
+  );
+}
+function TopBar({onHome,showHome,onSound,soundOn,onSettings,hc}){
+  return h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',marginBottom:14}},
+    showHome?h('button',{className:'tapbtn',onClick:onHome,style:{...cardBox(hc),width:42,height:42,borderRadius:50,fontSize:'1.2rem',display:'flex',alignItems:'center',justifyContent:'center'}},'🏠'):h('div',{style:{width:42}}),
+    h('div',{style:{display:'flex',gap:8}},
+      h('button',{className:'tapbtn',onClick:onSound,style:{...cardBox(hc),width:42,height:42,borderRadius:50,fontSize:'1.2rem',display:'flex',alignItems:'center',justifyContent:'center'}},soundOn?'🔊':'🔇'),
+      h('button',{className:'tapbtn',onClick:onSettings,style:{...cardBox(hc),width:42,height:42,borderRadius:50,fontSize:'1.2rem',display:'flex',alignItems:'center',justifyContent:'center'}},'⚙️')
+    )
+  );
+}
+function ProgressPath({total,current,icon,hc}){
+  return h('div',{style:{display:'flex',gap:7,justifyContent:'center',flexWrap:'wrap',padding:'2px 0 14px'}},
+    Array.from({length:total},(_,i)=>h('div',{key:i,style:{width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1rem',background:i<current?'#F6E9B8':'#fff',border:`2px solid ${i===current?(hc?'#000':'#C9A15A'):(hc?'#000':'#E5E0D3')}`,boxShadow:i===current&&!hc?'0 0 0 3px rgba(201,161,90,.22)':'none'}},i<current?icon:'')));
+}
+
+/* ---------- せっていパネル ---------- */
+function PrefsPanel({prefs,setPrefs,onClose}){
+  const hc=prefs.contrast==='high';
+  const upd=(k,v)=>setPrefs(p=>({...p,[k]:v}));
+  const Row=(title,children)=>h('div',{style:{marginBottom:18}},h('div',{style:{fontSize:'.85rem',fontWeight:800,color:'#5A5443',marginBottom:8}},title),children);
+  const Choice=(active,label,onClick)=>h('button',{className:'tapbtn',onClick,style:{...cardBox(hc),padding:'10px 16px',fontWeight:800,fontSize:'.88rem',color:active?'#A9803D':'#5A5443',border:active?'3px solid #C9A15A':(hc?'3px solid #000':'1px solid #F0EBDF')}},label);
+  return h('div',{style:{position:'fixed',inset:0,background:'rgba(40,36,28,.4)',zIndex:900,display:'flex',alignItems:'flex-end',justifyContent:'center'}},
+    h('div',{style:{background:hc?'#fff':'#FBF9F4',borderRadius:'28px 28px 0 0',padding:'22px 20px 30px',width:'100%',maxWidth:420,maxHeight:'85vh',overflowY:'auto'}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}},
+        h('div',{style:{fontSize:'1.15rem',fontWeight:900,color:'#3A3529'}},'せってい'),
+        h('button',{className:'tapbtn',onClick:onClose,style:{width:36,height:36,borderRadius:50,background:'#EFE9DA',fontSize:'1rem'}},'✕')
+      ),
+      Row('おと',h('div',{style:{display:'flex',gap:8}},Choice(!prefs.sound,'🔇 なし',()=>upd('sound',false)),Choice(prefs.sound,'🔊 あり',()=>upd('sound',true)))),
+      Row('うごき（アニメーション）',h('div',{style:{display:'flex',gap:8}},Choice(!prefs.motion,'すくなめ',()=>upd('motion',false)),Choice(prefs.motion,'ふつう',()=>upd('motion',true)))),
+      Row('コントラスト',h('div',{style:{display:'flex',gap:8}},Choice(prefs.contrast==='normal','やわらか',()=>upd('contrast','normal')),Choice(prefs.contrast==='high','はっきり',()=>upd('contrast','high')))),
+      Row('もじの おおきさ',h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},Choice(prefs.textSize==='normal','ふつう',()=>upd('textSize','normal')),Choice(prefs.textSize==='large','おおきい',()=>upd('textSize','large')),Choice(prefs.textSize==='xlarge','とてもおおきい',()=>upd('textSize','xlarge')))),
+      Row('すきな アイコン',h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},ICONS.map(ic=>h('button',{key:ic,className:'tapbtn',onClick:()=>upd('icon',ic),style:{...cardBox(hc),width:48,height:48,borderRadius:14,fontSize:'1.4rem',border:prefs.icon===ic?'3px solid #C9A15A':(hc?'3px solid #000':'1px solid #F0EBDF')}},ic))))
+    )
+  );
+}
+
+/* ---------- App ---------- */
+function App(){
+  const [prefs,setPrefsRaw]=useState(loadPrefs);
+  const setPrefs=(updater)=>setPrefsRaw(p=>{const np=typeof updater==='function'?updater(p):updater;savePrefs(np);return np;});
+  const [prefsOpen,setPrefsOpen]=useState(false);
+  const hc=prefs.contrast==='high';
+  useEffect(()=>{document.documentElement.style.fontSize=TEXTSIZE_PCT[prefs.textSize]||'100%';},[prefs.textSize]);
+
+  const [scr,setScr]=useState('home');
+  const [op,setOp]=useState('+');
+  const [danNum,setDanNum]=useState(2);
+  const [level,setLevel]=useState(20);
+  const [qCount,setQCount]=useState(5);
+  const [questions,setQuestions]=useState([]);
+  const [qi,setQi]=useState(0);
+  const [choices,setChoices]=useState([]);
+  const [cs,setCs]=useState({});
+  const [locked,setLocked]=useState(false);
+  const [attempts,setAttempts]=useState(0);
+  const [firstTry,setFirstTry]=useState(0);
+  const qsr=useRef([]);const ftRef=useRef(0);
+
+  const [vzOp,setVzOp]=useState('+');
+  const [vzA,setVzA]=useState(6);
+  const [vzB,setVzB]=useState(3);
+  const [vzQ,setVzQ]=useState(4);
+  const [vzReveal,setVzReveal]=useState(false);
+
+  const q=questions[qi];
+  const cfg=OPC[op];
+  const isAddSub=op==='+'||op==='-';
+
+  const doStart=()=>{
+    const qs=genQuestions(op,danNum,level,op==='×'||op==='÷'?9:qCount);
+    qsr.current=qs;ftRef.current=0;
+    setQuestions(qs);setQi(0);setFirstTry(0);
+    setChoices(mkChoices(qs[0].ans,op,level));setCs({});setLocked(false);setAttempts(0);
+    setScr('game');
+  };
+  const goHome=()=>setScr('home');
+
+  useEffect(()=>{if(scr==='game'&&q){setChoices(mkChoices(q.ans,q.op,level));setCs({});setLocked(false);setAttempts(0);}},[qi,scr]);
+
+  const pick=(idx,chosen)=>{
+    if(locked||cs[idx])return;
+    if(chosen===q.ans){
+      setCs(c=>({...c,[idx]:'ok'}));setLocked(true);
+      if(attempts===0){ftRef.current+=1;setFirstTry(f=>f+1);}
+      if(prefs.sound)chimeOk();
+    }else{
+      const na=attempts+1;setAttempts(na);
+      setCs(c=>({...c,[idx]:'try'}));
+      if(prefs.sound)chimeTry();
+      if(na>=2){
+        const correctIdx=choices.findIndex(c=>c===q.ans);
+        setCs(c=>({...c,[correctIdx]:'reveal'}));
+        setLocked(true);
+      }
+    }
+  };
+  const next=()=>{
+    const nx=qi+1;
+    if(nx>=qsr.current.length)setScr('result');
+    setQi(nx);
+  };
+
+  useEffect(()=>{setVzReveal(false);},[vzOp,vzA,vzB,vzQ]);
+  const VZDEFAULTS={'+':{a:6,b:3},'-':{a:8,b:3},'×':{a:4,b:3},'÷':{a:0,b:3,q:4}};
+  const pickVzOp=k=>{setVzOp(k);const d=VZDEFAULTS[k];setVzA(d.a);setVzB(d.b);if(k==='÷')setVzQ(d.q);};
+  const setVzANum=n=>{if(vzOp==='×')setVzA(Math.max(1,Math.min(9,n)));else if(vzOp==='+')setVzA(Math.max(0,Math.min(99,n)));else if(vzOp==='-'){const c=Math.max(1,Math.min(99,n));setVzA(c);setVzB(b=>Math.min(b,c));}};
+  const setVzBNum=n=>{if(vzOp==='×')setVzB(Math.max(1,Math.min(9,n)));else if(vzOp==='+')setVzB(Math.max(0,Math.min(99,n)));else if(vzOp==='-')setVzB(Math.max(0,Math.min(vzA,n)));else if(vzOp==='÷')setVzB(Math.max(1,Math.min(9,n)));};
+  const setVzQNum=n=>setVzQ(Math.max(1,Math.min(9,n)));
+  let vA,vB,vAns;
+  if(vzOp==='+'){vA=vzA;vB=vzB;vAns=vzA+vzB;}
+  else if(vzOp==='-'){vA=vzA;vB=vzB;vAns=vzA-vzB;}
+  else if(vzOp==='×'){vA=vzA;vB=vzB;vAns=vzA*vzB;}
+  else{vA=vzB*vzQ;vB=vzB;vAns=vzQ;}
+  const vcfg=OPC[vzOp];
+
+  const bg=hc?'#FFFFFF':'#F6F3EA';
+  const txt=hc?'#000000':'#2F2A1F';
+
+  const Stepper=({value,min,max,onChange,accent,big10})=>{
+    const dec=n=>onChange(Math.max(min,value-n));
+    const inc=n=>onChange(Math.min(max,value+n));
+    const Btn=(label,fn,muted)=>h('button',{className:'tapbtn',onClick:fn,style:{...cardBox(hc),width:muted?38:48,height:muted?38:48,borderRadius:14,color:muted?'#8A8577':accent,fontWeight:900,fontSize:muted?'.78rem':'1.15rem'}},label);
+    return h('div',{style:{display:'flex',alignItems:'center',gap:6,justifyContent:'center'}},
+      big10&&Btn('-10',()=>dec(10),true),Btn('－',()=>dec(1)),
+      h('div',{style:{minWidth:56,textAlign:'center',fontSize:'1.6rem',fontWeight:900,color:txt}},value),
+      Btn('＋',()=>inc(1)),big10&&Btn('+10',()=>inc(10),true)
+    );
+  };
+
+  return h('div',{style:{minHeight:'100vh',background:bg,color:txt,display:'flex',flexDirection:'column',alignItems:'center',padding:'16px 14px 44px'}},
+    prefsOpen&&h(PrefsPanel,{prefs,setPrefs,onClose:()=>setPrefsOpen(false)}),
+
+    scr==='home'&&h('div',{className:'view',style:{width:'100%',maxWidth:380,display:'flex',flexDirection:'column',alignItems:'center'}},
+      h(TopBar,{showHome:false,onSound:()=>setPrefs(p=>({...p,sound:!p.sound})),soundOn:prefs.sound,onSettings:()=>setPrefsOpen(true),hc}),
+      h('div',{style:{width:84,height:84,background:hc?'#fff':'#F6E9B8',border:hc?'3px solid #000':'none',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:38,marginBottom:14}},prefs.icon),
+      h('div',{style:{fontSize:'1.9rem',fontWeight:900,margin:'0 0 4px',textAlign:'center'}},'やさしい さんすう'),
+      h('div',{style:{fontSize:'.85rem',color:'#8A8577',fontWeight:700,marginBottom:24,textAlign:'center'}},'じぶんの ペースで すすめよう'),
+      h('div',{style:{display:'flex',flexDirection:'column',gap:12,width:'100%'}},
+        h('button',{className:'tapbtn',onClick:()=>setScr('opSelect'),style:{...cardBox(hc),display:'flex',alignItems:'center',gap:14,padding:'16px 18px',textAlign:'left'}},
+          h('div',{style:{width:50,height:50,borderRadius:16,background:'#FAF3E4',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}},'🧮'),
+          h('div',{style:{flex:1}},h('div',{style:{fontSize:'1.02rem',fontWeight:900}},'けいさんに ちょうせん'),h('div',{style:{fontSize:'.76rem',color:'#8A8577',fontWeight:600,marginTop:2}},'じぶんの ペースで といてみよう'))
+        ),
+        h('button',{className:'tapbtn',onClick:()=>setScr('visualizer'),style:{...cardBox(hc),display:'flex',alignItems:'center',gap:14,padding:'16px 18px',textAlign:'left'}},
+          h('div',{style:{width:50,height:50,borderRadius:16,background:'#F3EEF8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}},'🧩'),
+          h('div',{style:{flex:1}},h('div',{style:{fontSize:'1.02rem',fontWeight:900}},'すうじを みてみる'),h('div',{style:{fontSize:'.76rem',color:'#8A8577',fontWeight:600,marginTop:2}},'てんすうは ないよ。じゆうに かずを みよう'))
+        )
+      )
+    ),
+
+    scr==='opSelect'&&h('div',{className:'view',style:{width:'100%',maxWidth:380,display:'flex',flexDirection:'column',alignItems:'center'}},
+      h(TopBar,{showHome:true,onHome:goHome,onSound:()=>setPrefs(p=>({...p,sound:!p.sound})),soundOn:prefs.sound,onSettings:()=>setPrefsOpen(true),hc}),
+      h('div',{style:{fontSize:'1.3rem',fontWeight:900,marginBottom:16,textAlign:'center'}},'なにを する？'),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,width:'100%'}},
+        ['+','-','×','÷'].map(k=>{const c=OPC[k];return h(BigBtn,{key:k,label:c.sym,sub:c.label,accent:c.color,soft:c.bg,hc,onClick:()=>{setOp(k);setDanNum(2);setLevel(20);setScr('setup');}});})
+      )
+    ),
+
+    scr==='setup'&&h('div',{className:'view',style:{width:'100%',maxWidth:380,display:'flex',flexDirection:'column',alignItems:'center'}},
+      h(TopBar,{showHome:true,onHome:goHome,onSound:()=>setPrefs(p=>({...p,sound:!p.sound})),soundOn:prefs.sound,onSettings:()=>setPrefsOpen(true),hc}),
+      h('div',{style:{width:60,height:60,borderRadius:'50%',background:cfg.bg,border:hc?'3px solid #000':'none',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem',color:cfg.color,fontWeight:900}},cfg.sym),
+      h('div',{style:{fontSize:'1.4rem',fontWeight:900,margin:'10px 0 18px'}},cfg.label),
+      isAddSub&&h('div',{style:{width:'100%',marginBottom:18}},
+        h('div',{style:{fontSize:'.85rem',fontWeight:800,color:'#5A5443',marginBottom:8,textAlign:'center'}},'こたえの おおきさ'),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7}},
+          [10,20,50,100].map(lv=>h('button',{key:lv,className:'tapbtn',onClick:()=>setLevel(lv),style:{...cardBox(hc),padding:'12px 0',fontWeight:800,fontSize:'.95rem',color:level===lv?cfg.color:'#5A5443',border:level===lv?`3px solid ${cfg.color}`:(hc?'3px solid #000':'1px solid #F0EBDF')}},'〜'+lv))
+        )
+      ),
+      !isAddSub&&h('div',{style:{width:'100%',marginBottom:18}},
+        h('div',{style:{fontSize:'.85rem',fontWeight:800,color:'#5A5443',marginBottom:8,textAlign:'center'}},op==='×'?'なんの だん？':'なんで わる？'),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7}},
+          [2,3,4,5,6,7,8,9].map(n=>h('button',{key:n,className:'tapbtn',onClick:()=>setDanNum(n),style:{...cardBox(hc),padding:'12px 0',fontWeight:800,fontSize:'1.1rem',color:danNum===n?cfg.color:'#5A5443',border:danNum===n?`3px solid ${cfg.color}`:(hc?'3px solid #000':'1px solid #F0EBDF')}},n))
+        )
+      ),
+      isAddSub&&h('div',{style:{width:'100%',marginBottom:20}},
+        h('div',{style:{fontSize:'.85rem',fontWeight:800,color:'#5A5443',marginBottom:8,textAlign:'center'}},'なんもん やる？'),
+        h('div',{style:{display:'flex',gap:8,justifyContent:'center'}},
+          [5,10].map(n=>h('button',{key:n,className:'tapbtn',onClick:()=>setQCount(n),style:{...cardBox(hc),padding:'10px 22px',fontWeight:800,fontSize:'.92rem',color:qCount===n?cfg.color:'#5A5443',border:qCount===n?`3px solid ${cfg.color}`:(hc?'3px solid #000':'1px solid #F0EBDF')}},n+'もん'))
+        )
+      ),
+      h('button',{className:'tapbtn',onClick:doStart,style:{width:'100%',maxWidth:230,background:cfg.color,color:'#fff',borderRadius:50,padding:'15px 0',fontSize:'1.1rem',fontWeight:900,letterSpacing:2}},'はじめる')
+    ),
+
+    scr==='game'&&q&&h('div',{className:'view',style:{width:'100%',maxWidth:380,display:'flex',flexDirection:'column',alignItems:'center'}},
+      h(TopBar,{showHome:true,onHome:goHome,onSound:()=>setPrefs(p=>({...p,sound:!p.sound})),soundOn:prefs.sound,onSettings:()=>setPrefsOpen(true),hc}),
+      h(ProgressPath,{total:qsr.current.length,current:qi,icon:prefs.icon,hc}),
+      h('div',{style:{...cardBox(hc),width:'100%',padding:'16px 14px',marginBottom:14}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:8}},
+          h('div',{style:{background:cfg.bg,color:cfg.color,borderRadius:50,padding:'3px 14px',fontSize:'.8rem',fontWeight:800}},cfg.label),
+          TTS_OK&&h('button',{className:'tapbtn',onClick:()=>speak(q.a+(op==='+'?'たす':op==='-'?'ひく':op==='×'?'かける':'わる')+q.b),style:{marginLeft:'auto',width:36,height:36,borderRadius:50,background:'#F1EEE4',fontSize:'1rem'}},'🔊')
+        ),
+        h(OpVisual,{op:q.op,a:q.a,b:q.b,hc,motion:prefs.motion}),
+        h('div',{style:{textAlign:'center',fontSize:'1.9rem',fontWeight:900,marginTop:10,display:'flex',alignItems:'center',justifyContent:'center',gap:8,flexWrap:'wrap'}},
+          h('span',{style:{color:cfg.color}},q.a),h('span',{style:{color:'#8A8577'}},cfg.sym),h('span',{style:{color:cfg.color}},q.b),h('span',{style:{color:'#8A8577'}},'='),h('span',{style:{color:cfg.dark}},'？')
+        )
+      ),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,width:'100%',marginBottom:14}},
+        choices.map((c,i)=>{const st=cs[i];return h('button',{key:i,className:'tapbtn',onClick:()=>pick(i,c),disabled:locked||st==='try',style:{...cardBox(hc),padding:'16px 0',fontSize:'1.4rem',fontWeight:900,background:st==='ok'||st==='reveal'?'#EAF4EC':st==='try'?'#F1EFE9':'#fff',color:st==='ok'||st==='reveal'?'#3F8F55':st==='try'?'#B0AA98':txt,opacity:st==='try'?.6:1,border:st==='ok'||st==='reveal'?'3px solid #3F8F55':(hc?'3px solid #000':'1px solid #F0EBDF')}},c);})
+      ),
+      h('div',{style:{minHeight:56,display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}},
+        !locked&&attempts>0&&h('div',{style:{fontSize:'.9rem',fontWeight:800,color:cfg.dark}},'おしい！もういちど えらんでみよう'),
+        locked&&h('button',{className:'tapbtn',onClick:next,style:{background:cfg.color,color:'#fff',borderRadius:50,padding:'13px 34px',fontSize:'1rem',fontWeight:900}},'つぎへ →')
+      )
+    ),
+
+    scr==='result'&&h('div',{className:'view',style:{width:'100%',maxWidth:380,display:'flex',flexDirection:'column',alignItems:'center'}},
+      h(TopBar,{showHome:true,onHome:goHome,onSound:()=>setPrefs(p=>({...p,sound:!p.sound})),soundOn:prefs.sound,onSettings:()=>setPrefsOpen(true),hc}),
+      h('div',{style:{width:84,height:84,background:hc?'#fff':'#F6E9B8',border:hc?'3px solid #000':'none',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:38,marginBottom:14}},prefs.icon),
+      h('div',{style:{fontSize:'1.35rem',fontWeight:900,marginBottom:16,textAlign:'center'}},'よく がんばったね！'),
+      h('div',{style:{...cardBox(hc),width:'100%',padding:'18px',marginBottom:16,textAlign:'center'}},
+        h('div',{style:{fontSize:'1rem',fontWeight:800,color:'#5A5443',marginBottom:6}},qsr.current.length+'もん ぜんぶ やったよ'),
+        h('div',{style:{fontSize:'.85rem',color:'#8A8577',fontWeight:700}},'1かいめで こたえられたのは '+firstTry+'もん')
+      ),
+      h('div',{style:{display:'flex',flexDirection:'column',gap:8,width:'100%',maxWidth:230}},
+        h('button',{className:'tapbtn',onClick:doStart,style:{background:cfg.color,color:'#fff',borderRadius:50,padding:'13px 0',fontSize:'1rem',fontWeight:900}},'もういちど'),
+        h('button',{className:'tapbtn',onClick:()=>setScr('opSelect'),style:{...cardBox(hc),color:cfg.color,borderRadius:50,padding:'13px 0',fontSize:'1rem',fontWeight:900}},'べつの けいさんへ'),
+        h('button',{className:'tapbtn',onClick:goHome,style:{background:'transparent',color:'#8A8577',borderRadius:50,padding:'11px 0',fontSize:'.9rem',fontWeight:800}},'🏠 ホームへ')
+      )
+    ),
+
+    scr==='visualizer'&&h('div',{className:'view',style:{width:'100%',maxWidth:380,display:'flex',flexDirection:'column',alignItems:'center'}},
+      h(TopBar,{showHome:true,onHome:goHome,onSound:()=>setPrefs(p=>({...p,sound:!p.sound})),soundOn:prefs.sound,onSettings:()=>setPrefsOpen(true),hc}),
+      h('div',{style:{fontSize:'1.25rem',fontWeight:900,marginBottom:14,textAlign:'center'}},'すうじを みてみる'),
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,width:'100%',marginBottom:14}},
+        Object.entries(OPC).map(([k,c])=>h('button',{key:k,className:'tapbtn',onClick:()=>pickVzOp(k),style:{...cardBox(hc),padding:'10px 0',fontWeight:900,fontSize:'1.2rem',color:c.color,border:vzOp===k?`3px solid ${c.color}`:(hc?'3px solid #000':'1px solid #F0EBDF')}},c.sym))
+      ),
+      h('div',{style:{...cardBox(hc),width:'100%',padding:'18px 16px',marginBottom:14}},
+        vzOp==='÷'
+          ?h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
+              h('div',null,h('div',{style:{textAlign:'center',fontSize:'.78rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},'1グループの かず'),h(Stepper,{value:vzQ,min:1,max:9,onChange:setVzQNum,accent:vcfg.color})),
+              h('div',null,h('div',{style:{textAlign:'center',fontSize:'.78rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},'なんグループに わける？'),h(Stepper,{value:vzB,min:1,max:9,onChange:setVzBNum,accent:vcfg.color})),
+              h('div',{style:{textAlign:'center',fontSize:'.82rem',fontWeight:800,color:'#8A8577'}},'ぜんぶで '+vA+'こ')
+            )
+          :h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
+              h('div',null,h('div',{style:{textAlign:'center',fontSize:'.78rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},vzOp==='×'?'1グループの かず':'1つめの かず'),h(Stepper,{value:vzA,min:vzOp==='×'?1:vzOp==='-'?1:0,max:vzOp==='×'?9:99,onChange:setVzANum,accent:vcfg.color,big10:vzOp!=='×'})),
+              h('div',null,h('div',{style:{textAlign:'center',fontSize:'.78rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},vzOp==='×'?'グループの かず':vzOp==='+'?'2つめの かず':'ひく かず'),h(Stepper,{value:vzB,min:vzOp==='×'?1:0,max:vzOp==='×'?9:vzOp==='-'?vzA:99,onChange:setVzBNum,accent:vcfg.color,big10:vzOp!=='×'}))
+            )
+      ),
+      h('div',{style:{...cardBox(hc),width:'100%',padding:'16px 12px',marginBottom:10}},
+        h('div',{style:{display:'flex',justifyContent:'flex-end',marginBottom:4}},
+          TTS_OK&&h('button',{className:'tapbtn',onClick:()=>speak(vA+(vzOp==='+'?'たす':vzOp==='-'?'ひく':vzOp==='×'?'かける':'わる')+vB),style:{width:36,height:36,borderRadius:50,background:'#F1EEE4',fontSize:'1rem'}},'🔊')
+        ),
+        h(OpVisual,{op:vzOp,a:vA,b:vB,hc,motion:prefs.motion}),
+        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:10,fontSize:'1.6rem',fontWeight:900,flexWrap:'wrap'}},
+          h('span',{style:{color:vcfg.color}},vA),h('span',{style:{color:vcfg.color}},vcfg.sym),h('span',{style:{color:vcfg.color}},vB),h('span',{style:{color:'#8A8577'}},'='),
+          vzReveal?h('span',{style:{color:'#3F8F55'}},vAns):h('button',{className:'tapbtn',onClick:()=>setVzReveal(true),style:{background:vcfg.bg,color:vcfg.color,borderRadius:14,padding:'4px 18px',fontWeight:900,fontSize:'1.1rem'}},'？')
+        )
+      ),
+      h('div',{style:{fontSize:'.72rem',color:'#8A8577',fontWeight:700,textAlign:'center'}},'？を タップすると こたえが みえるよ')
+    )
+  );
+}
+ReactDOM.createRoot(document.getElementById('app')).render(h(App));
+</script>
+</body>
+</html>
