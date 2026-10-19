@@ -140,13 +140,17 @@ function OpVisual({op,a,b,hc,motion}){
 }
 
 /* ---------- 出題 ---------- */
+const LEVEL_FLOOR={10:1,20:10,50:20,100:50};
+function addSubPairs(op,level){
+  const lo=LEVEL_FLOOR[level]||1,mn=level>=20?2:1,pairs=[];
+  if(op==='+'){for(let a=mn;a<level;a++)for(let b=mn;a+b<=level;b++){if(a+b<=lo)continue;if(level===20&&Math.max(a,b)<10)continue;pairs.push({a,b,op});}}
+  else{for(let a=Math.max(2,lo+1);a<=level;a++)for(let b=mn;b<a;b++)pairs.push({a,b,op});}
+  return pairs;
+}
 function genQuestions(op,danNum,level,qCount){
   if(op==='×'){const n=danNum||2;const all=[];for(let b=1;b<=9;b++)all.push({a:n,b,op});return all.map(p=>({...p,ans:p.a*p.b}));}
   if(op==='÷'){const n=danNum||2;const all=[];for(let q=1;q<=9;q++)all.push({a:n*q,b:n,op});return all.map(p=>({...p,ans:p.a/p.b}));}
-  let all=[];
-  if(op==='+'){const mx=level;for(let a=1;a<mx;a++)for(let b=1;a+b<=mx;b++)all.push({a,b,op});}
-  else{const mx=level;for(let a=2;a<=mx;a++)for(let b=1;b<a;b++)all.push({a,b,op});}
-  all=all.sort(()=>Math.random()-.5);
+  const all=addSubPairs(op,level).sort(()=>Math.random()-.5);
   return all.slice(0,qCount).map(p=>({...p,ans:p.op==='+'?p.a+p.b:p.a-p.b}));
 }
 function mkChoices(ans,op,level){
@@ -324,7 +328,7 @@ function App(){
       isAddSub&&h('div',{style:{width:'100%',marginBottom:18}},
         h('div',{style:{fontSize:'.85rem',fontWeight:800,color:'#5A5443',marginBottom:8,textAlign:'center'}},'こたえの おおきさ'),
         h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7}},
-          [10,20,50,100].map(lv=>h('button',{key:lv,className:'tapbtn',onClick:()=>setLevel(lv),style:{...cardBox(hc),padding:'12px 0',fontWeight:800,fontSize:'.95rem',color:level===lv?cfg.color:'#5A5443',border:level===lv?`3px solid ${cfg.color}`:(hc?'3px solid #000':'1px solid #F0EBDF')}},'〜'+lv))
+          [10,20,50,100].map(lv=>h('button',{key:lv,className:'tapbtn',onClick:()=>setLevel(lv),style:{...cardBox(hc),padding:'12px 0',fontWeight:800,fontSize:'.95rem',color:level===lv?cfg.color:'#5A5443',border:level===lv?`3px solid ${cfg.color}`:(hc?'3px solid #000':'1px solid #F0EBDF')}},'〜'+lv,h('br'),h('span',{style:{fontSize:'.55rem',fontWeight:700,color:'#8A8577'}},(op==='+'?'こたえ ':'もとの かず ')+(lv===10?2:LEVEL_FLOOR[lv]+1)+'〜'+lv)))
         )
       ),
       !isAddSub&&h('div',{style:{width:'100%',marginBottom:18}},

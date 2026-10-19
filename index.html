@@ -88,7 +88,7 @@ function BlockRow({count,fill,border}){return h('div',{style:{display:'flex',gap
 function AddVisual({a,b,level}){
   const fr=FRUITS[(a+b)%FRUITS.length];
   const A=OPC['+'],B=OPC['-'];
-  if(level>=50){
+  if(level>=20){
     const rA=Math.floor(a/10),rB=Math.floor(b/10),remA=a%10,remB=b%10;
     return h('div',{style:{display:'flex',flexWrap:'wrap',alignItems:'flex-start',justifyContent:'center',gap:14,padding:'6px 2px'}},
       h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:4}},
@@ -121,7 +121,7 @@ function SubVisual({a,b,level}){
   const [phase,setPhase]=useState('show');
   useEffect(()=>{setPhase('show');const t1=setTimeout(()=>setPhase('blink'),500);const t2=setTimeout(()=>setPhase('fade'),2000);return()=>{clearTimeout(t1);clearTimeout(t2);};},[a,b]);
   const blinkStyle=phase==='blink'?{animation:'blink 0.45s ease-in-out 3'}:phase==='fade'?{animation:'slowfade 1.8s ease-in-out forwards'}:{};
-  if(level>=50){
+  if(level>=20){
     const rows=Math.floor(a/10),rem=a%10;let idx=0;const rowData=[];
     for(let r=0;r<rows;r++){const row=[];for(let c=0;c<10;c++){row.push(idx>=(a-b));idx++;}rowData.push(row);}
     const remRow=[];for(let c=0;c<rem;c++){remRow.push(idx>=(a-b));idx++;}
@@ -197,6 +197,13 @@ function FruitVisual({a,b,op,fk,level}){
 }
 
 /* ---------- 出題ロジック ---------- */
+const LEVEL_FLOOR={10:1,20:10,50:20,100:50};
+function addSubPairs(op,level){
+  const lo=LEVEL_FLOOR[level]||1,mn=level>=20?2:1,pairs=[];
+  if(op==='+'){for(let a=mn;a<level;a++)for(let b=mn;a+b<=level;b++){if(a+b<=lo)continue;if(level===20&&Math.max(a,b)<10)continue;pairs.push({a,b,op});}}
+  else{for(let a=Math.max(2,lo+1);a<=level;a++)for(let b=mn;b<a;b++)pairs.push({a,b,op});}
+  return pairs;
+}
 function genQuestions(op,dans,danMode,qCount,level){
   let pairs=[];
   if(op==='×'){
@@ -204,11 +211,9 @@ function genQuestions(op,dans,danMode,qCount,level){
     if(danMode==='junban'){ds.forEach(a=>{for(let b=1;b<=9;b++)pairs.push({a,b,op});});}
     else{ds.forEach(a=>{for(let b=1;b<=9;b++)pairs.push({a,b,op});});pairs=pairs.sort(()=>Math.random()-.5);const seen=new Set();pairs=pairs.filter(p=>{const k=p.a+'x'+p.b;if(seen.has(k))return false;seen.add(k);return true;});}
   }else if(op==='+'){
-    const mx=level;for(let a=1;a<mx;a++)for(let b=1;a+b<=mx;b++)pairs.push({a,b,op});
-    pairs=pairs.sort(()=>Math.random()-.5);
+    pairs=addSubPairs(op,level).sort(()=>Math.random()-.5);
   }else if(op==='-'){
-    const mx=level;for(let a=2;a<=mx;a++)for(let b=1;b<a;b++)pairs.push({a,b,op});
-    pairs=pairs.sort(()=>Math.random()-.5);
+    pairs=addSubPairs(op,level).sort(()=>Math.random()-.5);
   }else if(op==='÷'){
     const ds=danMode==='random'?[2,3,4,5,6,7,8,9]:(dans.size>0?[...dans]:[]);
     if(danMode==='junban'){ds.forEach(n=>{for(let q=1;q<=9;q++)pairs.push({a:n*q,b:n,op});});}
@@ -375,7 +380,7 @@ function App(){
       h('div',{style:{fontSize:'.85rem',color:'#8A93A6',fontWeight:700,marginBottom:26}},'あそんで まなぼう！'),
       h('div',{style:{display:'flex',flexDirection:'column',gap:12,width:'100%'}},
         h(ModeCard,{emoji:'🧮',title:'けいさんれんしゅう',desc:'たしざん・ひきざん・かけざん・わりざん',accent:'#4D96FF',soft:'#EFF5FF',onClick:()=>setScr('opSelect')}),
-        h(ModeCard,{emoji:'🧩',title:'すうじビジュアル',desc:'すきな かずを ブロックで みてみよう',accent:'#9775FA',soft:'#F4EFFF',onClick:()=>setScr('visualizer')})
+        h(ModeCard,{emoji:'🧩',title:'すうじブロック',desc:'すきな かずを ブロックで みてみよう',accent:'#9775FA',soft:'#F4EFFF',onClick:()=>setScr('visualizer')})
       )
     ),
 
@@ -399,7 +404,7 @@ function App(){
       isAddSub&&h('div',{style:{width:'100%',marginBottom:14}},
         h('div',{style:{fontSize:'.82rem',fontWeight:700,color:'#5B6376',marginBottom:8,textAlign:'center'}},'こたえの おおきさをえらんでね'),
         h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7}},
-          [10,20,50,100].map(lv=>h('button',{key:lv,className:'tapbtn',onClick:()=>setLevel(lv),style:{background:level===lv?cfg.bg:'#fff',border:level===lv?`2px solid ${cfg.color}`:'2px solid transparent',borderRadius:13,padding:'11px 0',fontWeight:800,fontSize:'1rem',color:level===lv?cfg.color:'#5B6376',boxShadow:'0 4px 14px rgba(32,36,47,.06)'}},levelLabels[lv]))
+          [10,20,50,100].map(lv=>h('button',{key:lv,className:'tapbtn',onClick:()=>setLevel(lv),style:{background:level===lv?cfg.bg:'#fff',border:level===lv?`2px solid ${cfg.color}`:'2px solid transparent',borderRadius:13,padding:'11px 0',fontWeight:800,fontSize:'1rem',color:level===lv?cfg.color:'#5B6376',boxShadow:'0 4px 14px rgba(32,36,47,.06)'}},levelLabels[lv],h('br'),h('span',{style:{fontSize:'.55rem',fontWeight:700,color:level===lv?cfg.dark:'#8A93A6'}},(op==='+'?'こたえ ':'もとの かず ')+(lv===10?2:LEVEL_FLOOR[lv]+1)+'〜'+lv)))
         )
       ),
 
@@ -472,7 +477,7 @@ function App(){
 
     scr==='visualizer'&&h('div',{className:'view',style:{display:'flex',flexDirection:'column',alignItems:'center',width:'100%',maxWidth:380,position:'relative',zIndex:1}},
       h(BackBtn,{onClick:goHome}),
-      h('div',{style:{fontSize:'1.3rem',fontWeight:900,marginBottom:4,textAlign:'center'}},'すうじビジュアル'),
+      h('div',{style:{fontSize:'1.3rem',fontWeight:900,marginBottom:4,textAlign:'center'}},'すうじブロック'),
       h('div',{style:{fontSize:'.76rem',color:'#8A93A6',fontWeight:700,marginBottom:14,textAlign:'center'}},'すきな かずを えらんで みてみよう'),
       h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,width:'100%',marginBottom:16}},
         Object.entries(OPC).map(([k,c])=>h('button',{key:k,className:'tapbtn',onClick:()=>pickVzOp(k),style:{background:vzOp===k?c.bg:'#fff',border:vzOp===k?`2px solid ${c.color}`:'2px solid transparent',borderRadius:16,padding:'10px 0',fontWeight:900,fontSize:'1.2rem',color:c.color,boxShadow:'0 4px 14px rgba(32,36,47,.06)'}},c.sym))
