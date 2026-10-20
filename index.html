@@ -79,6 +79,8 @@ const OPC={
   '×':{label:'かけざん',sym:'×',color:'#FFA94D',dark:'#E8862C',bg:'#FFF5E9'},
   '÷':{label:'わりざん',sym:'÷',color:'#9775FA',dark:'#7C4FE0',bg:'#F4EFFF'},
 };
+/* たし算・ひき算で「どっちの数か」を色で対応づける（1つめ＝オレンジ／2つめ＝あお） */
+const NUMC={a:{color:'#F5A03C',dark:'#D9801A',bg:'#FFF2DF'},b:{color:'#4D96FF',dark:'#3576DE',bg:'#EAF2FF'}};
 
 /* ---------- 可視化パーツ ---------- */
 const FRUITS=['🍎','🍊','🍋','🍇','🍓','🍑','🍒','🍍','🥝','🍌','🍉','🫐'];
@@ -87,7 +89,7 @@ function BlockRow({count,fill,border}){return h('div',{style:{display:'flex',gap
 
 function AddVisual({a,b,level}){
   const fr=FRUITS[(a+b)%FRUITS.length];
-  const A=OPC['+'],B=OPC['-'];
+  const A=NUMC.a,B=NUMC.b;
   if(level>=20){
     const rA=Math.floor(a/10),rB=Math.floor(b/10),remA=a%10,remB=b%10;
     return h('div',{style:{display:'flex',flexWrap:'wrap',alignItems:'flex-start',justifyContent:'center',gap:14,padding:'6px 2px'}},
@@ -117,7 +119,7 @@ function AddVisual({a,b,level}){
 
 function SubVisual({a,b,level}){
   const fr=FRUITS[a%FRUITS.length];
-  const A=OPC['+'],B=OPC['-'];
+  const A=NUMC.a,B=NUMC.b;
   const [phase,setPhase]=useState('show');
   useEffect(()=>{setPhase('show');const t1=setTimeout(()=>setPhase('blink'),500);const t2=setTimeout(()=>setPhase('fade'),2000);return()=>{clearTimeout(t1);clearTimeout(t2);};},[a,b]);
   const blinkStyle=phase==='blink'?{animation:'blink 0.45s ease-in-out 3'}:phase==='fade'?{animation:'slowfade 1.8s ease-in-out forwards'}:{};
@@ -340,6 +342,8 @@ function App(){
   else{vA=vzA;vB=vzB;const dq=Math.floor(vzA/vzB),dr=vzA%vzB;vAns=dr>0?dq+' あまり '+dr:String(dq);}
   const vzLevel=vzOp==='+'?(vA+vB<=20?10:100):vzOp==='-'?(vA<=20?10:100):10;
   const vcfg=OPC[vzOp];
+  const vAS=vzOp==='+'||vzOp==='-';
+  const vColA=vAS?NUMC.a:vcfg,vColB=vAS?NUMC.b:vcfg;
 
   const danLabel=op==='÷'?'でわる':'のだん';
   const levelLabels={10:'〜10',20:'〜20',50:'〜50',100:'〜100'};
@@ -347,7 +351,7 @@ function App(){
   const qText=()=>{
     if(!q)return null;
     return h('div',{style:{textAlign:'center',fontSize:'1.9rem',fontWeight:900,letterSpacing:2,marginTop:6,display:'flex',alignItems:'center',justifyContent:'center',gap:8,flexWrap:'wrap'}},
-      h('span',{style:{color:cfg.color}},q.a),h('span',{style:{color:'#8A93A6'}},cfg.sym),h('span',{style:{color:cfg.color}},q.b),h('span',{style:{color:'#8A93A6'}},'='),h('span',{style:{color:cfg.dark}},'？')
+      h('span',{style:{color:isAddSub?NUMC.a.color:cfg.color}},q.a),h('span',{style:{color:'#8A93A6'}},cfg.sym),h('span',{style:{color:isAddSub?NUMC.b.color:cfg.color}},q.b),h('span',{style:{color:'#8A93A6'}},'='),h('span',{style:{color:cfg.dark}},'？')
     );
   };
   const junbanBadge=()=>{
@@ -484,14 +488,14 @@ function App(){
       ),
       h('div',{style:{background:'white',borderRadius:24,boxShadow:'0 10px 30px rgba(32,36,47,.08)',width:'100%',padding:'18px 16px',marginBottom:14}},
         h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
-          h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},vzOp==='×'?'1グループの かず':vzOp==='÷'?'ぜんぶの かず':'1つめの かず'),h(Stepper,{value:vzA,min:vzOp==='×'?1:vzOp==='-'?1:0,max:vzOp==='×'?9:99,onChange:setVzANum,accent:vcfg.color,big10:vzOp!=='×'})),
-          h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vcfg.dark,marginBottom:6}},vzOp==='×'?'グループの かず':vzOp==='÷'?'なんグループに わける？':vzOp==='+'?'2つめの かず':'ひく かず'),h(Stepper,{value:vzB,min:vzOp==='×'||vzOp==='÷'?1:0,max:vzOp==='×'||vzOp==='÷'?9:vzOp==='-'?vzA:99,onChange:setVzBNum,accent:vcfg.color,big10:vzOp!=='×'&&vzOp!=='÷'}))
+          h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vColA.dark,marginBottom:6}},vzOp==='×'?'1グループの かず':vzOp==='÷'?'ぜんぶの かず':'1つめの かず'),h(Stepper,{value:vzA,min:vzOp==='×'?1:vzOp==='-'?1:0,max:vzOp==='×'?9:99,onChange:setVzANum,accent:vColA.color,big10:vzOp!=='×'})),
+          h('div',null,h('div',{style:{textAlign:'center',fontSize:'.74rem',fontWeight:800,color:vColB.dark,marginBottom:6}},vzOp==='×'?'グループの かず':vzOp==='÷'?'なんグループに わける？':vzOp==='+'?'2つめの かず':'ひく かず'),h(Stepper,{value:vzB,min:vzOp==='×'||vzOp==='÷'?1:0,max:vzOp==='×'||vzOp==='÷'?9:vzOp==='-'?vzA:99,onChange:setVzBNum,accent:vColB.color,big10:vzOp!=='×'&&vzOp!=='÷'}))
         )
       ),
       h('div',{style:{background:'white',borderRadius:24,boxShadow:'0 10px 30px rgba(32,36,47,.08)',width:'100%',padding:'16px 12px',marginBottom:10}},
         h(FruitVisual,{a:vA,b:vB,op:vzOp,fk:'vz-'+vzOp+vA+vB,level:vzLevel}),
         h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:10,fontSize:'1.6rem',fontWeight:900,flexWrap:'wrap'}},
-          h('span',{style:{color:vcfg.color}},vA),h('span',{style:{color:vcfg.color}},vcfg.sym),h('span',{style:{color:vcfg.color}},vB),h('span',{style:{color:'#8A93A6'}},'='),
+          h('span',{style:{color:vAS?NUMC.a.color:vcfg.color}},vA),h('span',{style:{color:'#8A93A6'}},vcfg.sym),h('span',{style:{color:vAS?NUMC.b.color:vcfg.color}},vB),h('span',{style:{color:'#8A93A6'}},'='),
           vzReveal?h('span',{style:{color:'#2E9E52',animation:'fpop .3s both'}},vAns):h('button',{className:'tapbtn',onClick:()=>setVzReveal(true),style:{background:vcfg.bg,color:vcfg.color,borderRadius:14,padding:'4px 18px',fontWeight:900,fontSize:'1.1rem'}},'？')
         )
       ),
